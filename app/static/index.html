@@ -1,0 +1,1052 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>sitecheck</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Unbounded:wght@500;700&display=swap">
+<style>
+/* Пульт: верхняя строка ввода, слева рельс истории, справа протокол проверки — от вердикта к деталям */
+:root {
+  --paper: #eef1f5;
+  --surface: #ffffff;
+  --ink: #131923;
+  --muted: #5b6676;
+  --rule: #d9dfe7;
+  --accent: #3242cf;
+  --accent-soft: #e6e9fb;
+  --ok: #177f4d;
+  --ok-soft: #e2f3ea;
+  --fail: #c4352d;
+  --fail-soft: #fbe7e5;
+  --warn: #a96400;
+  --warn-soft: #fbf0dc;
+  --idle: #c3cad4;
+  --shade: rgba(19, 25, 35, .4);
+  --top-h: 57px;
+  color-scheme: light;
+  --f-display: "Unbounded", "Golos Text", system-ui, sans-serif;
+  --f-body: "Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  --t-xs: 11.5px; --t-sm: 12.5px; --t-md: 14px; --t-lg: 16px; --t-xl: 20px; --t-hero: clamp(28px, 4.4vw, 42px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --paper: #0e1217; --surface: #161b22; --ink: #e3e8ef; --muted: #8b96a7; --rule: #27303b;
+    --accent: #8d9bff; --accent-soft: #1f2447;
+    --ok: #43c283; --ok-soft: #12291e; --fail: #ff6d62; --fail-soft: #34191a;
+    --warn: #eba63f; --warn-soft: #33270f; --idle: #3a4350; --shade: rgba(0, 0, 0, .55);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --paper: #0e1217; --surface: #161b22; --ink: #e3e8ef; --muted: #8b96a7; --rule: #27303b;
+  --accent: #8d9bff; --accent-soft: #1f2447;
+  --ok: #43c283; --ok-soft: #12291e; --fail: #ff6d62; --fail-soft: #34191a;
+  --warn: #eba63f; --warn-soft: #33270f; --idle: #3a4350; --shade: rgba(0, 0, 0, .55);
+}
+
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font: var(--t-md)/1.5 var(--f-body); }
+button, input, select { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+
+.topbar {
+  position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5;
+  background: var(--surface); border-bottom: 1px solid var(--rule);
+}
+.topbar-in { display: flex; align-items: center; gap: 16px; padding: 10px 20px; max-width: 1480px; margin: 0 auto; }
+.brand { font: 700 15px/1 var(--f-display); letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.brand-mark { display: grid; grid-template-columns: repeat(3, 5px); gap: 2px; }
+.brand-mark i { height: 14px; border-radius: 1.5px; background: var(--ok); }
+.brand-mark i:nth-child(2) { background: var(--ok); }
+.brand-mark i:nth-child(3) { background: var(--fail); }
+.checkform { flex: 1; display: flex; min-width: 0; max-width: 720px; }
+.checkform input {
+  flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--rule); border-right: 0;
+  border-radius: 8px 0 0 8px; background: var(--paper); font-family: var(--f-mono); font-size: 13.5px;
+}
+.checkform input:focus { outline: none; border-color: var(--accent); background: var(--surface); }
+.checkform button {
+  padding: 0 18px; border: 0; border-radius: 0 8px 8px 0; background: var(--accent); color: var(--surface);
+  font-weight: 600; cursor: pointer;
+}
+.checkform button:hover { filter: brightness(1.08); }
+.who { margin-left: auto; display: flex; align-items: center; gap: 12px; font-size: var(--t-sm); color: var(--muted); white-space: nowrap; }
+.who a { color: var(--muted); }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border: 1px solid var(--rule);
+  border-radius: 6px; background: var(--surface); font-size: var(--t-sm); cursor: pointer; white-space: nowrap;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.done { color: var(--ok); border-color: var(--ok); }
+#histOpen { display: none; }
+
+.shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); gap: 28px; max-width: 1480px; margin: 0 auto; padding: 24px 20px 64px; }
+
+.rail { position: sticky; top: calc(var(--top-h) + 20px); align-self: start; max-height: calc(100vh - var(--top-h) - 40px); display: flex; flex-direction: column; gap: 10px; }
+.rail-head { display: flex; align-items: baseline; justify-content: space-between; }
+.label { font-size: var(--t-xs); font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.rail input { width: 100%; padding: 7px 10px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); font-size: var(--t-sm); }
+.hist { list-style: none; margin: 0; padding: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.hist a {
+  display: grid; grid-template-columns: 8px 1fr auto; gap: 2px 10px; align-items: center;
+  padding: 8px 10px; border-radius: 7px; color: inherit; text-decoration: none;
+}
+.hist a:hover { background: var(--surface); }
+.hist a.on { background: var(--surface); box-shadow: inset 0 0 0 1px var(--rule); }
+.hist .u { font-family: var(--f-mono); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hist .t { font-size: var(--t-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.hist .m { grid-column: 2 / 4; font-size: var(--t-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.pip { width: 8px; height: 8px; border-radius: 50%; }
+.pip.ok { background: var(--ok); } .pip.partial { background: var(--warn); } .pip.fail { background: var(--fail); }
+
+main { min-width: 0; display: flex; flex-direction: column; gap: 32px; }
+
+.verdict { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px 32px; align-items: end; }
+.verdict h1 { margin: 0; font: 700 var(--t-hero)/1.05 var(--f-display); letter-spacing: -.025em; overflow-wrap: anywhere; }
+.verdict-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.state {
+  display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 8px; border-radius: 999px;
+  font-size: var(--t-sm); font-weight: 600;
+}
+.state::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.state.ok { color: var(--ok); background: var(--ok-soft); }
+.state.partial { color: var(--warn); background: var(--warn-soft); }
+.state.fail { color: var(--fail); background: var(--fail-soft); }
+.meta { font-size: var(--t-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+.diagnosis { margin: 14px 0 0; max-width: 68ch; font-size: var(--t-lg); line-height: 1.55; text-wrap: pretty; }
+.diagnosis b { font-weight: 600; }
+.tally { display: grid; grid-template-columns: repeat(4, auto); gap: 0; border-left: 1px solid var(--rule); }
+.tally div { padding: 2px 18px; border-right: 1px solid var(--rule); }
+.tally b { display: block; font: 500 24px/1.1 var(--f-mono); font-variant-numeric: tabular-nums; }
+.tally b.bad { color: var(--fail); }
+.tally span { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; }
+
+.sectnav {
+  position: sticky; top: var(--top-h); z-index: 4; display: flex; gap: 4px; flex-wrap: wrap;
+  padding: 8px 0; background: var(--paper); border-bottom: 1px solid var(--rule); margin-bottom: -16px;
+}
+.sectnav a { padding: 4px 10px; border-radius: 6px; color: var(--muted); text-decoration: none; font-size: var(--t-sm); font-weight: 500; }
+.sectnav a:hover { color: var(--ink); background: var(--surface); }
+.sectnav a .n { font-family: var(--f-mono); font-size: var(--t-xs); margin-left: 4px; }
+.sectnav a .n.bad { color: var(--fail); }
+
+section { scroll-margin-top: calc(var(--top-h) + 56px); display: flex; flex-direction: column; gap: 14px; }
+.sh { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.sh h2 { margin: 0; font: 600 var(--t-xl)/1.2 var(--f-body); letter-spacing: -.01em; text-wrap: balance; }
+.sh .hint { font-size: var(--t-sm); color: var(--muted); }
+.sh .tools { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+
+.panel { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+.scroll { overflow-x: auto; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; font-size: var(--t-xs); font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 10px 12px; white-space: nowrap; border-bottom: 1px solid var(--rule); }
+td { padding: 9px 12px; border-top: 1px solid var(--rule); vertical-align: top; }
+tbody tr:first-child td { border-top: 0; }
+
+.ladder td.stage { font-family: var(--f-mono); font-size: 12px; white-space: nowrap; padding-left: 0; padding-right: 0; }
+.ladder th.stage { padding-left: 0; padding-right: 0; }
+.seg { display: flex; align-items: center; gap: 6px; padding: 3px 10px; border-left: 3px solid; margin-right: 2px; min-width: 112px; }
+.seg.ok { border-color: var(--ok); background: var(--ok-soft); color: var(--ok); }
+.seg.fail { border-color: var(--fail); background: var(--fail-soft); color: var(--fail); font-weight: 600; }
+.seg.none { border-color: var(--rule); color: var(--muted); }
+.seg.skip { border-color: var(--idle); color: var(--muted); background: repeating-linear-gradient(135deg, transparent 0 5px, var(--paper) 5px 10px); }
+.ipcell { font-family: var(--f-mono); font-size: 13px; white-space: nowrap; }
+.tag {
+  display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 4px; font: 600 10.5px/1.6 var(--f-body);
+  letter-spacing: .03em; text-transform: uppercase; vertical-align: 1px;
+}
+.tag.tunnel { color: var(--accent); background: var(--accent-soft); }
+.tag.stub { color: var(--fail); background: var(--fail-soft); }
+.tag.cdn { color: var(--muted); background: var(--paper); }
+.tag.geo { color: var(--warn); background: var(--warn-soft); }
+.tag.ad { color: var(--muted); background: var(--paper); }
+
+.who-c { min-width: 190px; max-width: 280px; }
+.who-n { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.who-n.lone { color: var(--fail); }
+.who-l { font-size: 12px; color: var(--muted); line-height: 1.4; }
+.asn { font-size: 12.5px; white-space: nowrap; }
+.asn b { font-family: var(--f-mono); font-weight: 600; margin-right: 4px; }
+.below { padding: 10px 12px; border-top: 1px solid var(--rule); display: flex; gap: 8px 18px; flex-wrap: wrap; align-items: center; font-size: var(--t-sm); color: var(--muted); }
+.below .sp { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+select.fmt { padding: 4px 8px; border: 1px solid var(--rule); border-radius: 6px; background: var(--surface); font-size: var(--t-sm); }
+
+.route { border: 1px solid var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.cols3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.col { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.col + .col { border-left: 1px solid var(--rule); }
+.colh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.colh h3 { margin: 0; font-size: var(--t-md); font-weight: 600; }
+.colh .c { font-family: var(--f-mono); font-size: var(--t-sm); color: var(--muted); }
+.colh .tools { margin-left: auto; display: flex; gap: 4px; }
+.list { margin: 0; padding: 0; list-style: none; font-family: var(--f-mono); font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.list li { overflow-wrap: anywhere; }
+.list .why { display: block; font: 12px/1.4 var(--f-body); color: var(--warn); margin-top: 1px; }
+.list .via { font: 12px var(--f-body); color: var(--muted); }
+.colnote { font-size: 12px; color: var(--muted); margin-top: auto; }
+.footnote { padding: 12px 16px; border-top: 1px solid var(--rule); font-size: var(--t-sm); display: flex; gap: 6px 14px; flex-wrap: wrap; }
+.footnote b { font-weight: 600; }
+
+.ipless { padding: 12px 16px; background: var(--warn-soft); border-bottom: 1px solid var(--rule); border-radius: 9px 9px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.ipless-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: var(--warn); }
+.ipless-head b { font-size: var(--t-md); font-weight: 600; }
+.ipless-head .btn { margin-left: auto; }
+.ipless-mark { width: 20px; height: 20px; border-radius: 50%; background: var(--warn); color: var(--surface); display: grid; place-items: center; font: 700 13px/1 var(--f-body); flex: none; }
+.ipless-list { list-style: none; margin: 0; padding: 0 0 0 30px; display: flex; flex-direction: column; gap: 4px; font-size: var(--t-sm); }
+.ipless-list li { display: flex; gap: 4px 12px; flex-wrap: wrap; align-items: baseline; }
+.ipless-list .mono { font-size: 13px; font-weight: 600; color: var(--ink); }
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--muted); cursor: pointer; }
+.check input { accent-color: var(--accent); }
+
+.filters { display: inline-flex; padding: 2px; border-radius: 8px; background: var(--rule); gap: 2px; }
+.filters button { border: 0; background: transparent; padding: 4px 10px; border-radius: 6px; font-size: var(--t-sm); cursor: pointer; color: var(--muted); }
+.filters button[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 600; }
+.filters .n { font-family: var(--f-mono); font-size: var(--t-xs); margin-left: 3px; }
+
+tr.st-fail td:first-child { box-shadow: inset 3px 0 0 var(--fail); }
+tr.st-partial td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+tr.is-ad .host { color: var(--muted); }
+.host { font-family: var(--f-mono); font-size: 13px; overflow-wrap: anywhere; }
+.cname { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.err { font-family: var(--f-mono); font-size: 12px; color: var(--fail); }
+.chips { display: flex; gap: 4px; flex-wrap: wrap; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 7px; border-radius: 5px;
+  background: var(--paper); font-family: var(--f-mono); font-size: 12px; white-space: nowrap;
+}
+.chip.bad { background: var(--fail-soft); color: var(--fail); }
+.chip.dim { color: var(--muted); }
+[data-tip] { cursor: help; }
+button[data-tip], label[data-tip], select[data-tip] { cursor: pointer; }
+.tipped, .tag[data-tip], .chip[data-tip] .tl {
+  --dash: color-mix(in srgb, currentColor 40%, transparent);
+  background-image: linear-gradient(90deg, var(--dash) 50%, transparent 0);
+  background-size: 4px 1px; background-repeat: repeat-x; background-position: 0 100%;
+  padding-bottom: 1px;
+}
+.tipped:hover, .tipped:focus-visible, .tag[data-tip]:hover, .tag[data-tip]:focus-visible,
+.chip[data-tip]:hover .tl, .chip[data-tip]:focus-visible .tl { --dash: currentColor; }
+.chip[data-tip]:hover, .chip[data-tip]:focus-visible { box-shadow: inset 0 0 0 1px var(--rule); }
+.tip-t { font-weight: 600; font-size: 13px; }
+.tip-t.accent { color: var(--accent); } .tip-t.bad { color: var(--fail); } .tip-t.warn { color: var(--warn); } .tip-t.dim { color: var(--muted); }
+.tip {
+  position: absolute; z-index: 20; width: min(340px, calc(100vw - 24px)); padding: 12px 14px;
+  background: var(--surface); color: var(--ink); border: 1px solid var(--rule); border-radius: 10px;
+  box-shadow: 0 10px 30px -8px var(--shade); font-size: var(--t-sm); line-height: 1.45;
+  display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+}
+.tip-h { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.tip-h .tip-st { text-align: right; }
+.tip-h .mono { font-weight: 600; font-size: 13px; overflow-wrap: anywhere; }
+.tip-st { font-weight: 600; white-space: nowrap; }
+.tip-st.ok { color: var(--ok); } .tip-st.bad { color: var(--fail); } .tip-st.dim { color: var(--muted); }
+.tip-why { margin: 0; color: var(--muted); text-wrap: pretty; }
+.tip-steps { display: grid; grid-template-columns: max-content 8px 1fr; gap: 5px 10px; align-items: center; padding: 8px 10px; background: var(--paper); border-radius: 7px; }
+.tip-l { font: 600 11px/1 var(--f-mono); color: var(--muted); }
+.tip-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--rule); }
+.tip-dot.ok { background: var(--ok); } .tip-dot.fail { background: var(--fail); } .tip-dot.skip { background: var(--idle); }
+.tip-v { font-family: var(--f-mono); font-size: 12px; }
+.tip-v.ok { color: var(--ink); } .tip-v.fail { color: var(--fail); font-weight: 600; } .tip-v.none, .tip-v.skip { color: var(--muted); }
+.tip-kv { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; }
+.tip-kv dt { color: var(--muted); }
+.tip-kv dd { margin: 0; }
+.tip-kv b { font-weight: 600; }
+.tip-note { display: flex; gap: 8px; align-items: baseline; color: var(--muted); }
+.tip-note .tag { margin: 0; flex: none; }
+.cst { font: 500 11px/1 var(--f-body); padding-left: 6px; border-left: 1px solid currentColor; }
+.cst.ok { color: var(--ok); } .cst.bad { color: var(--fail); } .cst.dim { color: var(--muted); }
+.mini { display: inline-grid; grid-template-columns: repeat(3, 4px); gap: 1px; }
+.mini i { height: 11px; border-radius: 1px; background: var(--rule); }
+.mini i.ok { background: var(--ok); } .mini i.fail { background: var(--fail); }
+.mini i.skip { background: var(--idle); opacity: .6; }
+.st { font-size: var(--t-sm); font-weight: 600; white-space: nowrap; }
+.st.ok { color: var(--ok); } .st.partial { color: var(--warn); } .st.fail { color: var(--fail); }
+
+.dns td, .dns th { white-space: nowrap; }
+.dns td { font-family: var(--f-mono); font-size: 12px; }
+.dns td.odd-stub { background: var(--fail-soft); }
+.dns td.odd-tunnel { background: var(--accent-soft); }
+.dns .x { color: var(--fail); }
+.dns .lone { color: var(--fail); font-weight: 600; }
+.dns .rtype { display: block; font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--muted); font-size: 11px; }
+.dnskey { display: grid; grid-template-columns: max-content 1fr; gap: 6px 12px; padding: 12px 14px; font-size: var(--t-sm); border-top: 1px solid var(--rule); align-items: baseline; }
+.dnskey .tag { margin: 0; justify-self: start; }
+
+details.panel > summary { list-style: none; cursor: pointer; padding: 12px 16px; display: flex; gap: 10px; align-items: center; font-weight: 600; }
+details.panel > summary::-webkit-details-marker { display: none; }
+details.panel > summary::before { content: "›"; font-size: 18px; line-height: 1; color: var(--muted); transition: transform .15s; }
+details[open].panel > summary::before { transform: rotate(90deg); }
+.srcs { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 12px; }
+
+.sample-unused { font-size: var(--t-xs); color: var(--muted); border: 1px dashed var(--rule); border-radius: 6px; padding: 2px 8px; }
+
+.shade { position: fixed; inset: 0; background: var(--shade); z-index: 9; }
+
+@media (max-width: 1100px) {
+  .verdict { grid-template-columns: 1fr; }
+  .tally { border-left: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid var(--rule); padding-top: 10px; }
+  .tally div:first-child { padding-left: 0; }
+  .tally div:last-child { border-right: 0; }
+}
+@media (max-width: 960px) {
+  .shell { grid-template-columns: minmax(0, 1fr); padding: 18px 16px 48px; }
+  #histOpen { display: inline-flex; }
+  .rail {
+    position: fixed; top: 0; bottom: 0; left: 0; width: min(320px, 88vw); max-height: none; z-index: 10;
+    background: var(--paper); padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 16px;
+    border-right: 1px solid var(--rule); transform: translateX(-100%); transition: transform .2s ease;
+  }
+  .rail.open { transform: none; }
+  .cols3 { grid-template-columns: minmax(0, 1fr); }
+  .col + .col { border-left: 0; border-top: 1px solid var(--rule); }
+}
+@media (max-width: 640px) {
+  .topbar-in { flex-wrap: wrap; padding: 10px 16px; gap: 10px; }
+  .checkform { order: 3; flex-basis: 100%; max-width: none; }
+  .who span { display: none; }
+  .tally { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 10px; }
+  .tally div:nth-child(2) { border-right: 0; }
+  .tally div:nth-child(3) { padding-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+[hidden] { display: none !important; }
+body { margin: 0; }
+img { max-width: 100%; }
+.brand { color: inherit; text-decoration: none; }
+.intro { max-width: 68ch; padding-block: 16px; }
+.intro h1 { margin: 0 0 12px; font: 700 clamp(22px, 3vw, 30px)/1.15 var(--f-display); letter-spacing: -.02em; text-wrap: balance; }
+.intro p { margin: 0 0 10px; color: var(--muted); font-size: var(--t-lg); }
+.running { display: flex; gap: 18px; align-items: center; padding: 22px 24px; background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; }
+.running-u { font: 700 20px/1.2 var(--f-display); overflow-wrap: anywhere; margin-bottom: 4px; }
+.spin { width: 28px; height: 28px; flex: none; border: 3px solid var(--rule); border-top-color: var(--accent); border-radius: 50%; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.pip.run { background: var(--accent); } .pip.unknown { background: var(--idle); }
+.state.unknown { color: var(--muted); background: var(--paper); }
+.st.unknown { color: var(--muted); }
+.hist-empty { padding: 8px 10px; }
+tr.group td { background: var(--paper); font-size: var(--t-sm); color: var(--muted); padding-block: 6px; }
+tr.group .st { margin-left: 6px; }
+.finalurl { margin-top: 6px; overflow-wrap: anywhere; }
+.err-text { color: var(--fail); }
+.empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+.tip-dot.na { background: var(--rule); } .tip-v.na { color: var(--muted); }
+.asntab td, .asntab th { white-space: nowrap; }
+#asn .scroll { border-top: 1px solid var(--rule); }
+.route > .col.muted { padding: 16px; }
+.checkform button:disabled { opacity: .6; cursor: progress; }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }
+</style>
+</head>
+<body>
+<header class="topbar" id="topbar">
+  <div class="topbar-in">
+    <button class="btn" id="histOpen" type="button" aria-controls="rail">История</button>
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>sitecheck</a>
+    <form class="checkform" id="checkForm">
+      <input id="url" type="text" placeholder="example.com или https://example.com/page" autocomplete="off" aria-label="Адрес сайта" autofocus>
+      <button type="submit" id="go">Проверить</button>
+    </form>
+    <div class="who" id="user" hidden><span id="who"></span><a id="logout" hidden>Выйти</a></div>
+  </div>
+</header>
+
+<div class="shade" id="shade" hidden></div>
+
+<div class="shell">
+  <aside class="rail" id="rail" aria-label="История проверок">
+    <div class="rail-head"><span class="label">История</span></div>
+    <input id="histQ" type="search" placeholder="поиск по адресу" autocomplete="off" aria-label="Поиск по истории">
+    <ul class="hist" id="hist"><li class="muted hist-empty">пока пусто</li></ul>
+  </aside>
+
+  <main id="out">
+    <div class="intro">
+      <h1>Проверка доступности сайта</h1>
+      <p>Введите адрес сверху. Проверка занимает 30–90 секунд: сайт открывается в фоновом браузере, все домены, к которым он обращается, резолвятся через 9 DNS, каждый IP проверяется по шагам TCP → TLS → HTTP, а ASN определяются по 6 источникам.</p>
+      <p>В результате — что добавить в прокси/VPN, что недоступно и почему.</p>
+    </div>
+  </main>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const FAIL = new Set(["tcp_timeout","tcp_refused","tcp_reset","tls_timeout","tls_reset","http_freeze","http_timeout","http_reset"]);
+const SKIP = new Set(["no_route","bogon","error"]);
+const ST_TEXT = {ok:"доступен", partial:"частично", fail:"недоступен", unknown:"нет данных"};
+const STATE_TEXT = {ok:"доступен", partial:"частично доступен", fail:"недоступен", unknown:"нет данных"};
+const SHORT = {"system":"системный","udp-cloudflare":"1.1.1.1","udp-google":"8.8.8.8","udp-yandex":"77.88.8.8","doh-cloudflare":"Cloudflare DoH","doh-google":"Google DoH","doh-quad9":"Quad9 DoH","doh-adguard":"AdGuard DoH","doh-yandex":"Яндекс DoH"};
+const RES_HEAD = {"system":["Системный","как у браузера"],"udp-cloudflare":["1.1.1.1","UDP"],"udp-google":["8.8.8.8","UDP"],"udp-yandex":["77.88.8.8","UDP"],"doh-cloudflare":["Cloudflare","DoH"],"doh-google":["Google","DoH"],"doh-quad9":["Quad9","DoH"],"doh-adguard":["AdGuard","DoH"],"doh-yandex":["Яндекс","DoH"]};
+const CDN_ASNS = {13335:"Cloudflare",209242:"Cloudflare",54113:"Fastly",20940:"Akamai",16625:"Akamai",16702:"Akamai",21342:"Akamai",15169:"Google",60068:"CDN77",200325:"BunnyCDN",22822:"Edgio",19551:"Imperva",30148:"Sucuri"};
+const CHIP_TEXT = {ok:"ок", tls_error:"ок, не TLS", no_route:"нет IPv6", bogon:"служебный", error:"ошибка", tcp_timeout:"TCP таймаут", tcp_reset:"TCP сброс", tcp_refused:"TCP отказ", tls_reset:"TLS сброс", tls_timeout:"TLS таймаут", http_reset:"HTTP сброс", http_freeze:"заморозка", http_timeout:"HTTP нет ответа"};
+const FAIL_SHORT = {tcp_timeout:"таймаут", tcp_refused:"отклонено", tcp_reset:"сброс", tls_timeout:"таймаут", tls_reset:"сброс", http_reset:"сброшено", http_freeze:"заморозка", http_timeout:"нет ответа"};
+const TIP_HEAD = {ok:"Отвечает напрямую", tls_error:"Отвечает, но не TLS", no_route:"Не проверялся", bogon:"Не проверялся", error:"Ошибка проверки", tcp_timeout:"Не подключается", tcp_reset:"Подключение сбрасывают", tcp_refused:"Подключение отклонено", tls_reset:"Режут на TLS", tls_timeout:"TLS зависает", http_reset:"Режут на ответе", http_freeze:"Заморозка ответа", http_timeout:"Нет ответа"};
+const TIP_WHY = {
+  ok: "Адрес работает без VPN: соединение, шифрование и ответ сайта прошли.",
+  tls_error: "Сервер ответил, но не TLS-рукопожатием. Сеть соединение пропускает, поэтому адрес считается доступным.",
+  no_route: "Это IPv6-адрес, а у сервера нет IPv6-маршрута — проверить его нельзя.",
+  bogon: "Служебный адрес (loopback и т.п.) — такие не проверяются.",
+  error: "Проверка завершилась ошибкой, результат неизвестен.",
+  tcp_timeout: "До адреса не доходят пакеты — IP заблокирован целиком или сервер лежит.",
+  tcp_reset: "Соединение рвут сразу — похоже на блокировку по IP.",
+  tcp_refused: "Сервер отклонил подключение на этом порту.",
+  tls_reset: "TCP прошёл, но рукопожатие TLS сбросили — так ТСПУ режет по имени сайта (SNI).",
+  tls_timeout: "TCP прошёл, но рукопожатие TLS не завершилось — похоже на блокировку по SNI.",
+  http_reset: "Соединение и шифрование установились, но ответ сайта оборвали — типичная блокировка ТСПУ.",
+  http_freeze: "Данные пошли и остановились — так выглядит «заморозка» ТСПУ после ~16 КБ.",
+  http_timeout: "Соединение установилось, но сайт не прислал ответ.",
+};
+const TAGS = {
+  fake: ["fake", "tunnel", "fake-IP", "accent", "Адрес из диапазона 198.18.0.0/15 — его выдал VPN-клиент на роутере. Браузер подключается к роутеру, а тот отправляет трафик в туннель. В прокси/VPN такие адреса не добавляют."],
+  private: ["частный", "stub", "Частный адрес", "bad", "Вместо публичного адреса вернулся частный — похоже на заглушку провайдера или роутера. В VPN не добавлять."],
+  sus: ["заглушка?", "stub", "Похоже на заглушку", "bad", "Этот адрес вернули меньше половины DNS, и он из сети, которую больше никто не называл. Обычно так провайдер подменяет ответ. В VPN такой IP не добавлять."],
+  geo: ["другая сеть", "geo", "Другая сеть", "warn", "Адрес из другой сети, но её подтверждают несколько DNS. Скорее всего это GeoDNS отдаёт разные площадки по регионам, а не подмена."],
+  bal: ["балансировка", "cdn", "Балансировка CDN", "dim", "Адрес отличается от большинства, но сеть (ASN) та же. CDN раздаёт разным резолверам разные адреса — это нормально."],
+  lone: ["1 DNS", "stub", "Вернул только один DNS", "bad", "Этот IP назвал всего один резолвер, а браузер к нему не подключался. Возможно, это заглушка провайдера — проверьте, прежде чем добавлять в VPN."],
+  onlydomain: ["только доменом", "geo", "Только доменом", "warn", "У домена нет IP, которые имеет смысл добавлять. Направить его в туннель можно только доменным правилом."],
+};
+const DOM_FMT = {
+  asis: ["как есть", "Домены в том виде, в каком к ним обращался сайт."],
+  base: ["базовые", "Поддомены свёрнуты до основного домена: cdn.example.co.uk → example.co.uk."],
+  singbox: ["sing-box", "Поле domain_suffix для правила маршрутизации: example.com совпадает и с самим доменом, и со всеми *.example.com."],
+  mihomo: ["Clash / mihomo", "Правила DOMAIN-SUFFIX — тоже покрывают все поддомены."],
+};
+const STATIC_TIPS = {
+  cidr: ["Копировать в формате CIDR", "", "Каждый адрес с маской: /32 — один IPv4, /128 — один IPv6. В таком виде их принимают правила sing-box и большинства прокси-клиентов. Fake-IP и частные адреса не включаются."],
+  copyip: ["Копировать IP", "", "Адреса по одному на строку. Fake-IP не включаются."],
+  ads: ["Без рекламы и трекеров", "", "Реклама, аналитика, соцсети и трекеры: сайт работает и без них, проксировать их не нужно. Списки — AdGuard DNS filter и Disconnect, обновляются раз в сутки. Снимите галочку, чтобы увидеть и их."],
+};
+
+let current = null, pollTimer = null, domFilter = "bad", dnsAll = false, hideTrk = true, ipFam = "all", domFmt = "asis";
+let V = null;
+try { const f = localStorage.getItem("domFmt"); if (DOM_FMT[f]) domFmt = f; } catch {}
+
+const cidr = ip => ip + (ip.includes(":") ? "/128" : "/32");
+const isBadHost = h => h.status === "fail" || h.status === "partial";
+const plural = (n, one, few, many) => { const m10 = n % 10, m100 = n % 100; return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many; };
+const fmtKb = s => s.replace(/(\d)\.(\d)/g, "$1,$2");
+
+function parseProbe(ip, host) {
+  const st = ip.probe.status, d = ip.probe.detail || "";
+  const m = d.match(/^TCP (\d+) мс(?:, TLS ок)?(?:, (.*))?$/);
+  const tcp = m ? m[1] + " мс" : "";
+  const rest = m ? m[2] || "" : d;
+  const tls = host.probe_tls;
+  if (SKIP.has(st)) {
+    const why = st === "no_route" ? "нет маршрута IPv6" : st === "bogon" ? "служебный адрес" : "ошибка";
+    return [["skip", why], ["skip", "—"], ["skip", "—"]];
+  }
+  if (st.startsWith("tcp_")) return [["fail", FAIL_SHORT[st]], ["none", "не дошло"], ["none", "не дошло"]];
+  if (st.startsWith("tls_") && st !== "tls_error") return [["ok", tcp || "ок"], ["fail", FAIL_SHORT[st]], ["none", "не дошло"]];
+  if (st === "tls_error") return [["ok", "ок"], ["ok", "не TLS: " + d], ["none", "не проверялся"]];
+  const tlsSeg = tls ? ["ok", "рукопожатие ок"] : ["na", "без TLS"];
+  if (st === "ok") {
+    const h = rest.match(/^HTTP (\S+), (.+)$/);
+    return [["ok", tcp || "ок"], tlsSeg, ["ok", h ? `${h[1]} · ${fmtKb(h[2])}` : fmtKb(rest) || "ответ получен"]];
+  }
+  return [["ok", tcp || "ок"], tlsSeg, ["fail", FAIL_SHORT[st] + (rest ? " — " + fmtKb(rest) : "")]];
+}
+const ipTone = st => FAIL.has(st) ? "bad" : SKIP.has(st) ? "dim" : "ok";
+
+function analyzeDns(r) {
+  const rids = Object.keys(r.resolvers);
+  const ipInfo = new Map();
+  for (const h of r.hosts) for (const ip of h.ips) ipInfo.set(ip.ip, ip);
+  const out = {};
+  for (const h of r.hosts) {
+    const d = r.dns[h.host] || {};
+    const answered = rids.filter(k => d[k] && !d[k].error && d[k].ips.length);
+    const diff = new Set(answered.map(k => d[k].ips.slice().sort().join(","))).size > 1;
+    const cnt = {};
+    for (const k of rids) for (const ip of (d[k] || {}).ips || []) cnt[ip] = (cnt[ip] || 0) + 1;
+    const ok = answered.length;
+    const asnCnt = {};
+    for (const k of answered) for (const a of new Set(d[k].ips.flatMap(ip => (ipInfo.get(ip) || {}).asns || []))) asnCnt[a] = (asnCnt[a] || 0) + 1;
+    const kindOf = ip => {
+      if (!diff || cnt[ip] * 2 >= ok) return null;
+      const i = ipInfo.get(ip) || {};
+      if (i.kind === "fakeip" || /^198\.1[89]\./.test(ip)) return "fake";
+      if (i.kind === "private") return "private";
+      const seen = Math.max(0, ...(i.asns || []).map(a => asnCnt[a] || 0));
+      return seen * 2 >= ok ? "bal" : seen >= 2 ? "geo" : "sus";
+    };
+    out[h.host] = {d, diff, kindOf, errs: rids.some(k => d[k] && d[k].error)};
+  }
+  return out;
+}
+
+function buildView(job) {
+  const r = job.result;
+  const ads = job.ads || {};
+  const hostBy = Object.fromEntries(r.hosts.map(h => [h.host, h]));
+  const ipHosts = {};
+  const ipSources = {};
+  for (const h of r.hosts) for (const ip of h.ips) {
+    (ipHosts[ip.ip] ||= []).push(h.host);
+    const s = ipSources[ip.ip] ||= new Set();
+    for (const x of ip.sources) s.add(x);
+  }
+  const dns = analyzeDns(r);
+  const loneResolver = ip => { const s = ipSources[ip]; return s && !s.has("browser") && s.size === 1 ? [...s][0] : null; };
+  return {job, r, ads, hostBy, ipHosts, dns, loneResolver, bases: job.bases || {}};
+}
+const findIp = (host, ip) => (V.hostBy[host] || {ips: []}).ips.find(i => i.ip === ip);
+const ipKey = (host, ip) => `ip:${host}|${ip}`;
+const tipAttr = key => `tabindex="0" data-tip="${esc(key)}"`;
+
+function tagHtml(t, extra = "") {
+  const [label, cls] = TAGS[t];
+  return `<span class="tag ${cls}" ${tipAttr("tag:" + t + (extra ? "|" + extra : ""))}>${label}</span>`;
+}
+function ipTags(ip, host) {
+  const odd = V.dns[host] ? V.dns[host].kindOf(ip.ip) : null;
+  let s = "";
+  if (ip.kind === "fakeip") s += tagHtml("fake");
+  else if (ip.kind === "private") s += tagHtml("private");
+  if (odd === "sus") s += tagHtml("sus");
+  return s;
+}
+function asnLine(a) {
+  const info = V.r.asns[a] || {name: ""};
+  return `<span class="asn tipped" ${tipAttr("asn:" + a)}><b>AS${a}</b>${esc(info.name)}</span>`;
+}
+function asnCell(list) { return list.length ? list.map(asnLine).join("<br>") : '<span class="muted">—</span>'; }
+function ipChip(ip, host) {
+  const t = ipTone(ip.probe.status);
+  return `<span class="chip ${t === "bad" ? "bad" : t === "dim" ? "dim" : ""}" ${tipAttr(ipKey(host, ip.ip))}><span class="tl">${esc(ip.ip)}</span>${ip.kind === "fakeip" ? '<span class="tag tunnel">fake</span>' : ip.kind === "private" ? '<span class="tag stub">частный</span>' : ""}<span class="cst ${t}">${CHIP_TEXT[ip.probe.status] || ip.probe.status}</span></span>`;
+}
+function copyBtn(list, label, tip) {
+  return list.length ? `<button class="btn" type="button" data-text="${esc(list.join("\n"))}"${tip ? ` data-tip="k:${tip}"` : ""}>${label}</button>` : "";
+}
+function hostNote(hosts, self) {
+  const hs = (hosts || []).filter(h => h !== self);
+  if (!hs.length) return "";
+  return ` <span class="via">— ${hs.slice(0, 2).map(esc).join(", ")}${hs.length > 2 ? ` +${hs.length - 2}` : ""}</span>`;
+}
+function ipLi(ip, hosts, why = "", extraTags = "") {
+  const host = (hosts || V.ipHosts[ip] || [])[0];
+  return `<li><span class="tipped" ${tipAttr(ipKey(host, ip))}>${esc(ip)}</span>${hostNote(hosts || V.ipHosts[ip], ip)}${extraTags}${why ? `<span class="why">${esc(why)}</span>` : ""}</li>`;
+}
+
+function whoReturned(ip, host) {
+  const src = ip.sources.filter(s => s !== "browser");
+  const browser = ip.sources.includes("browser");
+  const odd = V.dns[host] ? V.dns[host].kindOf(ip.ip) : null;
+  const lone = odd === "sus" || odd === "private";
+  const names = src.map(s => SHORT[s] || s).concat(browser ? ["браузер"] : []);
+  const total = Object.keys(V.r.resolvers).length;
+  return `<div class="who-n ${lone ? "lone" : ""}">${src.length} из ${total} DNS</div><div class="who-l">${lone ? "только " : ""}${esc(names.join(", "))}</div>`;
+}
+function seg([k, v]) { return `<td class="stage"><div class="seg ${k === "na" ? "none" : k}">${esc(v)}</div></td>`; }
+function ladderRows(h) {
+  const ips = h.ips.filter(i => ipFam === "all" || (ipFam === "v6") === i.ip.includes(":"));
+  if (!ips.length) return `<tr><td colspan="6" class="muted">${h.ips.length ? "нет адресов этого типа" : h.no_dns ? "домен не резолвится ни одним DNS" : "нет адресов"}</td></tr>`;
+  return ips.map(i => `<tr><td class="ipcell"><span class="tipped" ${tipAttr(ipKey(h.host, i.ip))}>${esc(i.ip)}</span>${ipTags(i, h.host)}</td><td class="who-c">${whoReturned(i, h.host)}</td>${parseProbe(i, h).map(seg).join("")}<td>${asnCell(i.asns)}</td></tr>`).join("");
+}
+
+function diagnosis(r, main, related) {
+  const parts = [];
+  const m = r.main;
+  if (m.error) parts.push(`Сайт не открылся в браузере: <b>${esc(m.error.replace(/\.+$/, ""))}</b>.`);
+  const pub = main.ips.filter(i => i.kind === "public" && !SKIP.has(i.probe.status));
+  const pubBad = pub.filter(i => FAIL.has(i.probe.status));
+  const tunnelOk = main.ips.some(i => i.kind === "fakeip" && i.probe.status === "ok");
+  const stage = list => {
+    const c = {TCP: 0, TLS: 0, ответе: 0};
+    for (const i of list) c[i.probe.status.startsWith("tcp") ? "TCP" : i.probe.status.startsWith("tls") ? "TLS" : "ответе"]++;
+    const top = Object.entries(c).sort((a, b) => b[1] - a[1])[0][0];
+    return top === "ответе" ? "на получении ответа" : top === "TLS" ? "на TLS-рукопожатии" : "ещё на TCP";
+  };
+  if (pub.length && pubBad.length === pub.length) {
+    parts.push(tunnelOk && !m.error ? `Открывается <b>только через туннель</b>: прямые адреса режутся ${stage(pubBad)}.` : `Прямые адреса сайта режутся ${stage(pubBad)}.`);
+  } else if (pubBad.length) {
+    parts.push(`${pubBad.length} из ${pub.length} прямых адресов сайта не отвечают — режутся ${stage(pubBad)}.`);
+  } else if (!m.error && pub.length) {
+    parts.push("Сайт открывается напрямую, все его адреса отвечают.");
+  }
+  const d = V.dns[main.host];
+  if (d) {
+    const stub = Object.keys(r.resolvers).filter(k => d.d[k] && (d.d[k].ips || []).some(ip => ["sus", "private"].includes(d.kindOf(ip))));
+    if (stub.length) parts.push(`${esc(stub.map(k => SHORT[k] || k).join(", "))} ${stub.length > 1 ? "отдают" : "отдаёт"} <b>заглушку провайдера</b>.`);
+  }
+  const bad = related.filter(isBadHost).filter(h => !hideTrk || !V.ads[h.host]);
+  if (related.length === 1) parts.push(bad.length ? "Единственный домен, к которому обращается сайт, не работает." : "Единственный домен, к которому обращается сайт, отвечает.");
+  else if (related.length) parts.push(bad.length ? `Из ${related.length} ${plural(related.length, "домена", "доменов", "доменов")}, к которым обращается сайт, не работают ${bad.length}.` : `Все ${related.length} ${plural(related.length, "домен", "домена", "доменов")}, к которым обращается сайт, отвечают.`);
+  return parts.join(" ");
+}
+
+function routeSection(p) {
+  if (!p) return "";
+  if (!p.domains.length && !p.ips.length && !p.doubt.length && !p.domain_only.length)
+    return `<section id="route"><div class="sh"><h2>Что добавить в прокси/VPN</h2></div><div class="panel route"><div class="col muted">Добавлять нечего: сайт и все нужные ему домены доступны.</div></div></section>`;
+  const onlyBases = new Set(p.domain_only.map(d => V.bases[d.host] || d.host));
+  const none = '<li class="muted">нет</li>';
+  const ipless = p.domain_only.length ? `<div class="ipless" role="note">
+      <div class="ipless-head"><span class="ipless-mark" aria-hidden="true">!</span>
+        <b>IP не помогут для ${p.domain_only.length} ${plural(p.domain_only.length, "домена", "доменов", "доменов")} — ${p.domain_only.length > 1 ? "их" : "его"} нужно добавить доменом</b>
+        ${copyBtn(p.domain_only.map(d => V.bases[d.host] || d.host), "копировать")}</div>
+      <ul class="ipless-list">${p.domain_only.map(d => `<li><span class="mono">${esc(d.host)}</span><span class="muted">${esc(d.reason)}</span></li>`).join("")}</ul>
+    </div>` : "";
+  return `<section id="route">
+    <div class="sh"><h2>Что добавить в прокси/VPN</h2><span class="hint">реклама и трекеры уже исключены</span></div>
+    <div class="panel route">${ipless}
+      <div class="cols3">
+        <div class="col">
+          <div class="colh"><h3>Домены</h3><span class="c">${p.domains.length}</span><span class="tools">${copyBtn(p.domains, "копировать")}</span></div>
+          <ul class="list">${p.domains.map(d => `<li>${esc(d)}${onlyBases.has(d) ? tagHtml("onlydomain", d) : ""}</li>`).join("") || none}</ul>
+          ${p.domains.length ? '<div class="colnote">Базовые домены: каждый покрывает и свои поддомены.</div>' : ""}
+        </div>
+        <div class="col">
+          <div class="colh"><h3>IP — добавлять</h3><span class="c">${p.ips.length}</span><span class="tools">${copyBtn(p.ips.map(e => cidr(e.ip)), "CIDR", "cidr")}${copyBtn(p.ips.map(e => e.ip), "IP")}</span></div>
+          <ul class="list">${p.ips.map(e => ipLi(e.ip, e.hosts)).join("") || none}</ul>
+          <div class="colnote">Стабильные адреса: не ротируются, не общий CDN, не похожи на заглушку.</div>
+        </div>
+        <div class="col">
+          <div class="colh"><h3>IP — под вопросом</h3><span class="c">${p.doubt.length}</span><span class="tools">${copyBtn(p.doubt.map(e => cidr(e.ip)), "CIDR", "cidr")}${copyBtn(p.doubt.map(e => e.ip), "IP")}</span></div>
+          <ul class="list">${p.doubt.map(e => ipLi(e.ip, e.hosts, e.reason)).join("") || none}</ul>
+        </div>
+      </div>
+    </div>
+  </section>`;
+}
+
+function collectBad(hosts) {
+  const ips = new Map(), asns = new Set(), ipHosts = new Map();
+  for (const h of hosts) for (const ip of h.ips) if (FAIL.has(ip.probe.status)) {
+    ips.set(ip.ip, ip);
+    for (const a of ip.asns) asns.add(a);
+    if (!ipHosts.has(ip.ip)) ipHosts.set(ip.ip, []);
+    ipHosts.get(ip.ip).push(h.host);
+  }
+  for (const h of hosts) if (h.status === "fail") for (const ip of h.ips) for (const a of ip.asns) asns.add(a);
+  return {ips, asns, ipHosts};
+}
+function domainsAs(hosts, fmt) {
+  if (fmt === "asis") return hosts;
+  const b = [...new Set(hosts.map(h => V.bases[h] || h))].sort();
+  if (fmt === "base") return b;
+  if (fmt === "mihomo") return b.map(d => "DOMAIN-SUFFIX," + d);
+  return ['"domain_suffix": [', ...b.map((d, i) => `  ${JSON.stringify(d)}${i < b.length - 1 ? "," : ""}`), "]"];
+}
+function downSection(r) {
+  const badHosts = r.hosts.filter(isBadHost);
+  const adBad = badHosts.filter(h => V.ads[h.host]);
+  const sumHosts = hideTrk ? badHosts.filter(h => !V.ads[h.host]) : badHosts;
+  const sum = collectBad(hideTrk ? r.hosts.filter(h => !V.ads[h.host]) : r.hosts);
+  const names = sumHosts.map(h => h.host).sort();
+  const listHosts = domainsAs(names, domFmt);
+  const nDomains = domFmt === "asis" ? names.length : domainsAs(names, "base").length;
+  const listIps = [...sum.ips.keys()].sort();
+  const vpn = listIps.filter(ip => sum.ips.get(ip).kind === "public").map(cidr);
+  const asns = [...sum.asns].sort((a, b) => a - b);
+  const none = '<li class="muted">нет</li>';
+  return `<section id="down">
+    <div class="sh"><h2>Недоступное</h2><span class="hint">сводка без дублей</span>
+      <span class="tools"><label class="check" data-tip="k:ads"><input type="checkbox" id="hideTrk" ${hideTrk ? "checked" : ""}>без рекламы и трекеров</label></span></div>
+    <div class="panel">
+      <div class="cols3">
+        <div class="col">
+          <div class="colh"><h3>Домены</h3><span class="c">${nDomains}</span><span class="tools">
+            ${names.length ? `<select class="fmt" id="domFmt" aria-label="Формат списка доменов" data-tip="fmt:">${Object.entries(DOM_FMT).map(([k, [n]]) => `<option value="${k}" ${k === domFmt ? "selected" : ""}>${n}</option>`).join("")}</select>` : ""}
+            ${copyBtn(listHosts, "копировать")}</span></div>
+          <ul class="list">${listHosts.map(x => `<li>${esc(x).replace(/ /g, "&nbsp;")}</li>`).join("") || none}</ul>
+        </div>
+        <div class="col">
+          <div class="colh"><h3>IP</h3><span class="c">${listIps.length}</span><span class="tools">${copyBtn(vpn, "CIDR", "cidr")}${copyBtn(listIps, "копировать")}</span></div>
+          <ul class="list">${listIps.map(ip => {
+            const o = sum.ips.get(ip);
+            const lone = V.loneResolver(ip);
+            const tags = (o.kind === "fakeip" ? tagHtml("fake") : o.kind === "private" ? tagHtml("private") : "") + (lone ? tagHtml("lone", lone) : "");
+            return ipLi(ip, sum.ipHosts.get(ip), "", tags);
+          }).join("") || none}</ul>
+        </div>
+        <div class="col">
+          <div class="colh"><h3>ASN</h3><span class="c">${asns.length}</span><span class="tools">${copyBtn(asns.map(a => `AS${a}  ${(r.asns[a] || {}).name || ""}`), "копировать")}</span></div>
+          <ul class="list">${asns.map(a => `<li><span class="tipped" ${tipAttr("asn:" + a)}>AS${a}</span> <span class="via">${esc((r.asns[a] || {}).name || "")}</span></li>`).join("") || none}</ul>
+        </div>
+      </div>
+      ${adBad.length ? `<div class="footnote muted">${hideTrk ? `Не включены — реклама и трекеры (${adBad.length}):` : "Включены реклама и трекеры:"} ${adBad.map(h => `<span class="mono">${esc(h.host)}</span><span class="tag ad" ${tipAttr("ad:" + h.host)}>${esc(V.ads[h.host].label)}</span>`).join(" ")}</div>` : ""}
+    </div>
+  </section>`;
+}
+
+function domainsSection(related) {
+  const nBad = related.filter(isBadHost).length;
+  const rows = related.filter(h => domFilter === "all" || (domFilter === "bad" ? isBadHost(h) : !isBadHost(h)))
+    .sort((a, b) => (isBadHost(b) - isBadHost(a)) || a.host.localeCompare(b.host));
+  const errs = h => {
+    const e = Object.entries(h.errors);
+    if (!e.length) return h.no_dns ? '<div class="err">домен не резолвится ни одним DNS</div>' : "";
+    return e.map(([k, v]) => `<div class="err">${esc(k)}${v > 1 ? ` ×${v}` : ""}</div>`).join("");
+  };
+  return `<section id="domains">
+    <div class="sh"><h2>Домены, к которым обращается сайт</h2>
+      <span class="tools"><span class="filters" role="group" aria-label="Фильтр доменов">
+        <button type="button" data-f="bad" aria-pressed="${domFilter === "bad"}">с проблемами<span class="n">${nBad}</span></button>
+        <button type="button" data-f="ok" aria-pressed="${domFilter === "ok"}">доступные<span class="n">${related.length - nBad}</span></button>
+        <button type="button" data-f="all" aria-pressed="${domFilter === "all"}">все<span class="n">${related.length}</span></button>
+      </span></span></div>
+    <div class="panel">
+      ${rows.length ? `<div class="scroll"><table>
+        <thead><tr><th>Домен</th><th>Статус</th><th>Запросы</th><th>IP — все резолверы, без дублей</th><th>ASN</th></tr></thead>
+        <tbody>${rows.map(h => `<tr class="st-${h.status} ${V.ads[h.host] ? "is-ad" : ""}">
+          <td><div class="host">${esc(h.host)}${V.ads[h.host] ? `<span class="tag ad" ${tipAttr("ad:" + h.host)}>${esc(V.ads[h.host].label)}</span>` : ""}</div>${h.cnames.length ? `<div class="cname">→ ${h.cnames.map(esc).join(", ")}</div>` : ""}${errs(h)}</td>
+          <td><span class="st ${h.status}">${ST_TEXT[h.status] || h.status}</span></td>
+          <td class="mono"><span class="tipped" ${tipAttr("req:" + h.host)}>${h.ok}/${h.requests}</span></td>
+          <td><div class="chips">${h.ips.map(i => ipChip(i, h.host)).join("") || '<span class="muted">—</span>'}</div></td>
+          <td>${asnCell(h.asns)}</td></tr>`).join("")}</tbody>
+      </table></div>
+      <div class="below"><span>Рядом с IP — результат прямого подключения: «ок» или шаг, на котором оборвалось (TCP, TLS, HTTP). Наведите на IP — что именно случилось и кто его вернул.</span></div>`
+      : `<div class="empty">${related.length ? "В этой категории пусто" : "Сайт не обращался к другим доменам (или не загрузился)"}</div>`}
+    </div>
+  </section>`;
+}
+
+function dnsSection(r) {
+  const rids = Object.keys(r.resolvers);
+  const all = r.hosts.map(h => ({h, ...V.dns[h.host]}));
+  const nDiff = all.filter(x => x.diff || x.errs).length;
+  const shown = all.filter(x => dnsAll || x.diff || x.errs);
+  return `<section id="dns">
+    <div class="sh"><h2>Ответы резолверов</h2>
+      <span class="tools"><span class="filters" role="group" aria-label="Фильтр DNS">
+        <button type="button" data-dns="0" aria-pressed="${!dnsAll}">расхождения<span class="n">${nDiff}</span></button>
+        <button type="button" data-dns="1" aria-pressed="${dnsAll}">все домены<span class="n">${all.length}</span></button>
+      </span></span></div>
+    <div class="panel">
+      ${shown.length ? `<div class="scroll"><table class="dns">
+        <thead><tr><th>Домен</th>${rids.map(k => { const [n, t] = RES_HEAD[k] || [r.resolvers[k], ""]; return `<th>${esc(n)}<span class="rtype">${esc(t)}</span></th>`; }).join("")}</tr></thead>
+        <tbody>${shown.map(({h, d, kindOf}) => `<tr><td class="host">${esc(h.host)}${h.role === "main" ? '<span class="tag cdn">сайт</span>' : ""}</td>${rids.map(k => {
+          const c = d[k] || {ips: [], error: "нет данных"};
+          if (c.error) return `<td><span class="tipped" ${tipAttr(`dnserr:${h.host}|${k}`)}><span class="x">✕</span> <span class="muted">${esc(c.error)}</span></span></td>`;
+          if (!c.ips.length) return '<td class="muted">—</td>';
+          const kinds = c.ips.map(kindOf);
+          const cell = kinds.includes("sus") || kinds.includes("private") ? "odd-stub" : kinds.includes("fake") ? "odd-tunnel" : "";
+          return `<td class="${cell}">${c.ips.map((ip, n) => `<div class="${kinds[n] === "sus" || kinds[n] === "private" ? "lone" : ""}"><span class="tipped" ${tipAttr(ipKey(h.host, ip))}>${esc(ip)}</span>${kinds[n] ? tagHtml(kinds[n]) : ""}</div>`).join("")}</td>`;
+        }).join("")}</tr>`).join("")}</tbody>
+      </table></div>` : '<div class="empty">Все резолверы ответили одинаково</div>'}
+      <div class="dnskey">
+        <span class="tag stub">заглушка?</span><span>сеть, которую вернул только этот резолвер, — вероятна подмена провайдером. В VPN не добавлять.</span>
+        <span class="tag tunnel">fake</span><span>подмена VPN-клиентом на роутере — для системного DNS это нормально.</span>
+        <span class="tag geo">другая сеть</span><span>её подтверждают несколько резолверов — скорее GeoDNS, чем подмена.</span>
+        <span class="tag cdn">балансировка</span><span>та же сеть, что у большинства: CDN раздаёт разные адреса.</span>
+      </div>
+    </div>
+  </section>`;
+}
+
+function asnSection(r) {
+  const srcs = Object.keys(r.asn_sources);
+  const ips = Object.keys(r.asn_by_ip).sort();
+  return `<section id="asn"><details class="panel">
+    <summary>Источники ASN <span class="muted" style="font-weight:400">${srcs.filter(s => !r.asn_sources[s].error).length} из ${srcs.length} ответили</span></summary>
+    <div class="srcs">${srcs.map(s => { const x = r.asn_sources[s];
+      return `<span class="chip ${x.error ? "bad" : ""}" ${tipAttr("src:" + s)}><span class="pip ${x.error ? "fail" : "ok"}"></span><span class="tl">${esc(x.label)}: ${x.error ? "ошибка" : x.found + " IP"}</span></span>`; }).join("")}</div>
+    ${ips.length ? `<div class="scroll"><table class="asntab"><thead><tr><th>IP</th>${srcs.map(s => `<th>${esc(r.asn_sources[s].label)}</th>`).join("")}</tr></thead><tbody>
+      ${ips.map(ip => { const m = r.asn_by_ip[ip]; const diff = new Set(Object.values(m)).size > 1;
+        return `<tr class="${diff ? "st-partial" : ""}"><td class="mono">${esc(ip)}</td>${srcs.map(s => `<td class="mono">${m[s] ? "AS" + m[s] : '<span class="muted">—</span>'}</td>`).join("")}</tr>`; }).join("")}
+    </tbody></table></div>` : ""}
+  </details></section>`;
+}
+
+function render(job) {
+  const out = $("#out");
+  if (job.state === "queued" || job.state === "running") {
+    out.innerHTML = `<div class="running"><div class="spin" aria-hidden="true"></div><div><div class="running-u">${esc(job.url.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</div><div class="muted">${esc(job.progress || "")}</div></div></div>`;
+    return;
+  }
+  if (job.state === "error") {
+    out.innerHTML = `<div class="verdict"><div><div class="verdict-top"><span class="state fail">проверка не удалась</span></div><h1>${esc(job.url.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</h1><p class="diagnosis err-text">${esc(job.error)}</p></div></div>`;
+    return;
+  }
+  const keepScroll = scrollY;
+  const openAsn = !!document.querySelector("#asn details[open]");
+  V = buildView(job);
+  const r = V.r;
+  const main = r.hosts.find(h => h.host === r.main_host);
+  const redirects = r.hosts.filter(h => h.role === "main" && h.host !== r.main_host);
+  const related = r.hosts.filter(h => h.role !== "main");
+  const badHosts = r.hosts.filter(isBadHost);
+  const badIps = collectBad(r.hosts).ips;
+  const nDown = (hideTrk ? badHosts.filter(h => !V.ads[h.host]) : badHosts).length;
+  const nDnsDiff = r.hosts.filter(h => V.dns[h.host].diff || V.dns[h.host].errs).length;
+  const m = r.main;
+  const when = new Date(r.started * 1000).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit"});
+  const meta = [when, `${String(r.duration).replace(".", ",")} с`, m.error ? "" : m.http_status ? `HTTP ${m.http_status}` : ""].filter(Boolean).join(" · ");
+  const allIps = [main, ...redirects].flatMap(h => h.ips);
+  const fam = i => ipFam === "all" || (ipFam === "v6") === i.ip.includes(":");
+  const plainIps = [...new Set(allIps.filter(fam).filter(i => i.kind !== "fakeip").map(i => i.ip))];
+  const cidrIps = [...new Set(allIps.filter(fam).filter(i => i.kind === "public").map(i => cidr(i.ip)))];
+
+  out.innerHTML = `
+    <div class="verdict">
+      <div>
+        <div class="verdict-top"><span class="state ${m.status}">${STATE_TEXT[m.status] || m.status}</span><span class="meta">${esc(meta)}</span></div>
+        <h1>${esc(r.main_host)}</h1>
+        ${m.final_url && m.final_url !== r.url ? `<div class="meta finalurl">→ <span class="mono">${esc(m.final_url)}</span></div>` : ""}
+        <p class="diagnosis">${diagnosis(r, main, related)}</p>
+      </div>
+      <div class="tally">
+        <div><b>${related.length}</b><span>${plural(related.length, "связанный домен", "связанных домена", "связанных доменов")}</span></div>
+        <div><b class="${badHosts.length ? "bad" : ""}">${badHosts.length}</b><span>${plural(badHosts.length, "домен", "домена", "доменов")} с проблемами</span></div>
+        <div><b class="${badIps.size ? "bad" : ""}">${badIps.size}</b><span>IP не ${badIps.size === 1 ? "отвечает" : "отвечают"}</span></div>
+        <div><b>${Object.keys(r.asns).length}</b><span>разных ASN</span></div>
+      </div>
+    </div>
+    <nav class="sectnav" aria-label="Разделы">
+      ${job.route ? '<a href="#route">В прокси/VPN</a>' : ""}
+      <a href="#addr">Адреса сайта</a>
+      <a href="#down">Недоступное<span class="n ${nDown ? "bad" : ""}">${nDown}</span></a>
+      <a href="#domains">Домены<span class="n">${related.length}</span></a>
+      <a href="#dns">DNS<span class="n ${nDnsDiff ? "bad" : ""}">${nDnsDiff}</span></a>
+      <a href="#asn">Источники ASN</a>
+    </nav>
+    ${routeSection(job.route)}
+    <section id="addr">
+      <div class="sh"><h2>Адреса сайта</h2><span class="hint">каждый IP проверяется по шагам: TCP → TLS с SNI домена → HTTP без обрыва</span></div>
+      <div class="panel">
+        <div class="scroll"><table class="ladder">
+          <thead><tr><th>IP</th><th>Кто вернул IP</th><th class="stage">TCP</th><th class="stage">TLS</th><th class="stage">HTTP</th><th>ASN</th></tr></thead>
+          <tbody>${ladderRows(main)}${redirects.map(h => `<tr class="group"><td colspan="6">редирект: <span class="mono">${esc(h.host)}</span> <span class="st ${h.status}">${ST_TEXT[h.status] || h.status}</span></td></tr>${ladderRows(h)}`).join("")}</tbody>
+        </table></div>
+        <div class="below">
+          <span>«Кто вернул» — какие из ${Object.keys(r.resolvers).length} DNS-серверов назвали этот IP. Если адрес вернули один-два сервера, а остальные — другой, это обычно подмена ответа.</span>
+          <span class="sp">
+            <select class="fmt ipfam" id="ipFam" aria-label="Семейство адресов">${Object.entries({all: "IPv4 и IPv6", v4: "только IPv4", v6: "только IPv6"}).map(([k, n]) => `<option value="${k}" ${k === ipFam ? "selected" : ""}>${n}</option>`).join("")}</select>
+            ${copyBtn(plainIps, `копировать IP (${plainIps.length})`, "copyip")}
+            ${copyBtn(cidrIps, "CIDR", "cidr")}
+          </span>
+        </div>
+      </div>
+    </section>
+    ${downSection(r)}
+    ${domainsSection(related)}
+    ${dnsSection(r)}
+    ${asnSection(r)}`;
+  if (openAsn) document.querySelector("#asn details").open = true;
+  scrollTo(scrollX, keepScroll);
+}
+
+function stepsHtml(ip, host) {
+  const labels = ["TCP", "TLS", "HTTP"];
+  return `<div class="tip-steps">${parseProbe(ip, host).map(([k, v], n) => `<span class="tip-l">${labels[n]}</span><span class="tip-dot ${k}"></span><span class="tip-v ${k}">${esc(v)}</span>`).join("")}</div>`;
+}
+function genericTip(head, tone, text, kv = [], side = "", sideTone = "") {
+  return `<div class="tip-h"><span class="tip-t ${tone}">${esc(head)}</span>${side ? `<span class="tip-st ${sideTone}">${esc(side)}</span>` : ""}</div>
+    <p class="tip-why">${text}</p>
+    ${kv.length ? `<dl class="tip-kv">${kv.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join("")}</dl>` : ""}`;
+}
+function ipTip(host, addr) {
+  const h = V.hostBy[host];
+  const ip = h && findIp(host, addr);
+  if (!ip) {
+    const any = (V.ipHosts[addr] || []).find(x => findIp(x, addr));
+    return any ? ipTip(any, addr) : "";
+  }
+  const st = ip.probe.status;
+  const src = ip.sources.filter(s => s !== "browser");
+  const names = src.map(s => SHORT[s] || s).concat(ip.sources.includes("browser") ? ["браузер"] : []);
+  const odd = V.dns[host] ? V.dns[host].kindOf(addr) : null;
+  const notes = [];
+  if (ip.kind === "fakeip") notes.push(["fake", "Адрес выдал VPN-клиент роутера: проверка показывает работу туннеля, а не прямой доступ."]);
+  if (ip.kind === "private") notes.push(["private", TAGS.private[4]]);
+  if (odd && odd !== "fake" && odd !== "private") notes.push([odd, TAGS[odd][4]]);
+  const lone = V.loneResolver(addr);
+  if (lone && odd !== "sus") notes.push(["lone", `Этот IP назвал только ${esc(V.r.resolvers[lone] || lone)}, браузер к нему не подключался.`]);
+  const hosts = V.ipHosts[addr] || [];
+  const kv = [
+    ["Вернули", src.length ? `<b>${src.length} из ${Object.keys(V.r.resolvers).length} DNS</b> · ${esc(names.join(", "))}` : esc(names.join(", ")) || "—"],
+    ["Сеть", ip.asns.length ? ip.asns.map(a => `<b class="mono">AS${a}</b> ${esc((V.r.asns[a] || {}).name || "")}`).join("<br>") : ip.kind === "fakeip" ? "локальный адрес роутера" : "—"],
+    ["Проверка", `${esc(host)}, порт ${h.probe_port}${h.probe_tls ? ", TLS" : ""}`],
+  ];
+  if (hosts.length > 1) kv.push(["Домены", esc(hosts.join(", "))]);
+  return `<div class="tip-h"><span class="mono">${esc(addr)}</span><span class="tip-st ${ipTone(st)}">${TIP_HEAD[st] || esc(V.r.probe_labels[st] || st)}</span></div>
+    <p class="tip-why">${TIP_WHY[st] || esc(V.r.probe_labels[st] || st)}</p>
+    ${stepsHtml(ip, h)}
+    <dl class="tip-kv">${kv.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>
+    ${notes.map(([t, d]) => `<div class="tip-note"><span class="tag ${TAGS[t][1]}">${TAGS[t][0]}</span><span>${d}</span></div>`).join("")}`;
+}
+function asnTip(a) {
+  const info = V.r.asns[a] || {name: "", names: {}};
+  const ips = [], hosts = new Set();
+  for (const h of V.r.hosts) for (const i of h.ips) if (i.asns.includes(a)) { if (!ips.includes(i.ip)) ips.push(i.ip); hosts.add(h.host); }
+  const byName = Object.entries(info.names || {}).map(([k, v]) => `${esc((V.r.asn_sources[k] || {}).label || k)}: <span class="mono">${esc(v)}</span>`);
+  const cdn = CDN_ASNS[a];
+  return genericTip(`AS${a}`, "", cdn ? `Общий CDN (${cdn}): за этими адресами тысячи чужих сайтов, и адреса часто меняются. Добавлять их в VPN — значит отправить в туннель и чужие сайты.` : "Автономная система — сеть, которой принадлежат адреса.", [
+    ["Источники", byName.join("<br>") || "—"],
+    ["В проверке", `<b>${ips.length} IP</b> · ${esc([...hosts].join(", "))}`],
+  ], info.name);
+}
+function tipHtml(key) {
+  if (!V && !key.startsWith("k:")) return "";
+  const c = key.indexOf(":"), t = key.slice(0, c), v = key.slice(c + 1);
+  if (t === "ip") { const [host, ip] = v.split("|"); return ipTip(host, ip); }
+  if (t === "asn") return asnTip(+v);
+  if (t === "tag") {
+    const [name, extra] = v.split("|");
+    const [, , head, tone, text] = TAGS[name];
+    if (name === "lone" && extra) return genericTip(head, tone, text, [["Вернул", esc(V.r.resolvers[extra] || extra)]]);
+    if (name === "onlydomain" && extra) {
+      const items = ((V.job.route || {}).domain_only || []).filter(d => (V.bases[d.host] || d.host) === extra);
+      return genericTip(head, tone, text, items.map(d => [d.host, esc(d.reason)]));
+    }
+    return genericTip(head, tone, text);
+  }
+  if (t === "ad") {
+    const a = V.ads[v];
+    return a ? genericTip(a.label[0].toUpperCase() + a.label.slice(1), "dim", "Сайт работает и без этого домена — его режут блокировщики рекламы. В сводку недоступного и в список для прокси/VPN он не попадает, пока стоит галочка «без рекламы и трекеров».", [["Список", esc(a.source)]]) : "";
+  }
+  if (t === "req") {
+    const h = V.hostBy[v];
+    const failed = Object.values(h.errors).reduce((a, b) => a + b, 0);
+    const kv = [["Успешно", String(h.ok)], ["С ошибкой", String(failed)]];
+    if (h.benign) kv.push(["Отменено страницей", String(h.benign)]);
+    if (h.example_failed) kv.push(["Пример", `<span class="mono">${esc(h.example_failed)}</span>`]);
+    const text = h.requests ? (h.ok === h.requests ? `Пока сайт открывался, браузер ${h.requests} ${plural(h.requests, "раз", "раза", "раз")} обратился к этому домену, и все ответы пришли.` : `Пока сайт открывался, браузер ${h.requests} ${plural(h.requests, "раз", "раза", "раз")} обратился к этому домену, успешных — ${h.ok}.`) : "Браузер к этому домену не обращался — домен найден по редиректу.";
+    return genericTip("Запросы браузера", "", text, kv, `${h.ok} из ${h.requests}`, h.ok === h.requests ? "ok" : "bad");
+  }
+  if (t === "dnserr") {
+    const [host, rid] = v.split("|");
+    const e = ((V.dns[host] || {}).d || {})[rid] || {};
+    return genericTip(V.r.resolvers[rid] || rid, "", "Резолвер не ответил на запрос об этом домене, поэтому его ответ не учитывается при сравнении.", [["Домен", esc(host)], ["Ошибка", `<span class="mono">${esc(e.error)}</span>`]], "нет ответа", "bad");
+  }
+  if (t === "src") {
+    const x = V.r.asn_sources[v];
+    return x.error ? genericTip(x.label, "bad", "Источник не ответил, ASN взяты из остальных.", [["Ошибка", `<span class="mono">${esc(x.error.split("\n")[0])}</span>`]], "ошибка", "bad")
+      : genericTip(x.label, "", `Нашёл ASN для ${x.found} из ${Object.keys(V.r.asn_by_ip).length} IP этой проверки.`, [], "ответил", "ok");
+  }
+  if (t === "fmt") { const [n, d] = DOM_FMT[domFmt]; return genericTip(`Формат: ${n}`, "", esc(d)); }
+  if (t === "k") { const [head, tone, text] = STATIC_TIPS[v]; return genericTip(head, tone, text); }
+  return "";
+}
+
+const tip = document.createElement("div");
+tip.className = "tip"; tip.setAttribute("role", "tooltip"); tip.hidden = true;
+document.body.appendChild(tip);
+let tipFor = null;
+function showTip(el) {
+  if (tipFor === el) return;
+  const html = tipHtml(el.dataset.tip);
+  if (!html) return hideTip();
+  tipFor = el;
+  tip.innerHTML = html;
+  tip.hidden = false;
+  const r = el.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+  const left = Math.max(12, Math.min(r.left, innerWidth - w - 12));
+  const below = r.bottom + 8 + h < innerHeight || r.top - h - 8 < 0;
+  tip.style.left = left + scrollX + "px";
+  tip.style.top = (below ? r.bottom + 8 : r.top - h - 8) + scrollY + "px";
+}
+function hideTip() { tipFor = null; tip.hidden = true; }
+document.addEventListener("mouseover", e => { const c = e.target.closest("[data-tip]"); c ? showTip(c) : hideTip(); });
+document.addEventListener("focusin", e => { const c = e.target.closest("[data-tip]"); c ? showTip(c) : hideTip(); });
+addEventListener("scroll", hideTip, {passive: true});
+
+$("#out").addEventListener("change", e => {
+  const t = e.target;
+  if (t.id === "domFmt") { domFmt = t.value; try { localStorage.setItem("domFmt", domFmt); } catch {} hideTip(); render(current); }
+  if (t.id === "hideTrk") { hideTrk = t.checked; render(current); }
+  if (t.id === "ipFam") { ipFam = t.value; render(current); }
+});
+document.addEventListener("click", e => {
+  const tipEl = e.target.closest("[data-tip]");
+  if (tipEl && !tipEl.matches("button, select, label")) { tipFor === tipEl ? hideTip() : showTip(tipEl); }
+  const f = e.target.closest("[data-f]");
+  if (f) { domFilter = f.dataset.f; render(current); return; }
+  const d = e.target.closest("[data-dns]");
+  if (d) { dnsAll = d.dataset.dns === "1"; render(current); return; }
+  const b = e.target.closest("[data-text]");
+  if (b) {
+    const txt = b.dataset.text;
+    if (!txt) return;
+    const label = b.dataset.label ||= b.textContent;
+    const done = () => { b.textContent = "скопировано"; b.classList.add("done"); setTimeout(() => { b.textContent = label; b.classList.remove("done"); }, 1200); };
+    // по http из локальной сети Clipboard API недоступен — тогда старый способ через textarea
+    const legacy = () => { const ta = document.createElement("textarea"); ta.value = txt; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); done(); };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(done, legacy);
+    else legacy();
+  }
+});
+
+async function load(id) {
+  clearTimeout(pollTimer);
+  const res = await fetch("/api/check/" + id);
+  if (!res.ok) { $("#out").innerHTML = '<div class="intro"><h1>Проверка не найдена</h1><p>Возможно, она удалена из истории: хранятся последние 50 проверок.</p></div>'; return; }
+  const fresh = current && current.id !== id;
+  current = await res.json();
+  if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
+  if (fresh) scrollTo(0, 0);
+  render(current);
+  markHistory();
+  if (current.state === "queued" || current.state === "running") pollTimer = setTimeout(() => load(id), 1500);
+  else { $("#go").disabled = false; loadHistory(); }
+}
+
+let historyItems = [];
+async function loadHistory() {
+  try { historyItems = await (await fetch("/api/history")).json(); } catch { return; }
+  renderHistory();
+}
+function renderHistory() {
+  const q = $("#histQ").value.trim().toLowerCase();
+  const items = q ? historyItems.filter(i => i.url.toLowerCase().includes(q)) : historyItems;
+  $("#hist").innerHTML = items.length ? items.map(i => {
+    const host = i.url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+    const st = i.state === "done" ? i.main_status : i.state === "error" ? "fail" : "run";
+    const when = new Date(i.created * 1000).toLocaleString("ru-RU", {day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"});
+    const m = i.state === "done" ? `${ST_TEXT[i.main_status] || i.main_status} · ${i.failed}/${i.hosts} с проблемами` : i.state === "error" ? "проверка не удалась" : "идёт проверка…";
+    return `<li><a href="#${i.id}" data-id="${i.id}"><span class="pip ${st}"></span><span class="u">${esc(host)}</span><span class="t">${when}</span><span class="m">${m}</span></a></li>`;
+  }).join("") : `<li class="muted hist-empty">${q ? "ничего не найдено" : "пока пусто"}</li>`;
+  markHistory();
+}
+function markHistory() {
+  document.querySelectorAll(".hist a").forEach(a => a.classList.toggle("on", !!current && a.dataset.id === current.id));
+}
+const rail = $("#rail"), shade = $("#shade");
+const drawer = open => { rail.classList.toggle("open", open); shade.hidden = !open; if (open) $("#histQ").focus(); };
+$("#histOpen").addEventListener("click", () => drawer(true));
+shade.addEventListener("click", () => drawer(false));
+$("#hist").addEventListener("click", e => { if (e.target.closest("a")) drawer(false); });
+$("#histQ").addEventListener("input", renderHistory);
+document.addEventListener("keydown", e => { if (e.key === "Escape") { drawer(false); hideTip(); } });
+
+$("#checkForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const url = $("#url").value.trim();
+  if (!url) return;
+  $("#go").disabled = true;
+  const res = await fetch("/api/check", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({url})});
+  const data = await res.json();
+  if (!res.ok) { $("#go").disabled = false; $("#out").innerHTML = `<div class="intro"><h1>Не получилось начать проверку</h1><p class="err-text">${esc(data.detail)}</p></div>`; return; }
+  domFilter = "bad"; dnsAll = false;
+  location.hash = data.id;
+  loadHistory();
+});
+addEventListener("hashchange", () => { const id = location.hash.slice(1); if (id && (!current || current.id !== id)) load(id); });
+
+new ResizeObserver(() => document.documentElement.style.setProperty("--top-h", $("#topbar").offsetHeight + "px")).observe($("#topbar"));
+
+async function loadUser() {
+  try {
+    const u = await (await fetch("/api/me")).json();
+    if (!u.username) return;
+    $("#who").textContent = u.name && u.name !== u.username ? `${u.name} (${u.username})` : u.username;
+    if (u.logout) { $("#logout").href = u.logout; $("#logout").hidden = false; }
+    $("#user").hidden = false;
+  } catch {}
+}
+loadUser();
+loadHistory();
+if (location.hash.length > 1) load(location.hash.slice(1));
+</script>
+</body>
+</html>

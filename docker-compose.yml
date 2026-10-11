@@ -1,0 +1,23 @@
+services:
+  sitecheck:
+    build: .
+    image: sitecheck:local
+    container_name: sitecheck
+    user: 1000:1000
+    network_mode: host                   # проверка идёт ровно из сети хоста (и через его VPN, если он есть)
+    restart: unless-stopped
+    init: true                           # подбирает зомби-процессы Chromium
+    shm_size: 1gb                        # Chromium падает с дефолтными 64 МБ /dev/shm
+    env_file:
+      - path: ./settings.env             # HOST, PORT, AUTH… — см. settings.env.example
+        required: false
+    environment:
+      - HOME=/data/home
+      - DATA_DIR=/data
+    volumes:
+      - ./data:/data                     # базы ASN и история проверок
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
